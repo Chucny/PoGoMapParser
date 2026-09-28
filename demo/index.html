@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoGoMapParser - Interactive Demo Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1e2525;
+            color: #eaeeee;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            border-bottom: 2px solid #3c4a4a;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+        canvas {
+            background: #b2f097;
+            border: 4px solid #5c987f;
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+        }
+        .panel {
+            background: #2a3333;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #3c4a4a;
+        }
+        button {
+            background: #6be071;
+            color: #1e2525;
+            border: none;
+            padding: 12px 20px;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 15px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #a1f0a4;
+        }
+        button:disabled {
+            background: #3c4a4a;
+            color: #7a8a8a;
+            cursor: not-allowed;
+        }
+        .log-box {
+            background: #121616;
+            padding: 10px;
+            border-radius: 4px;
+            height: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #4de2f7;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        h3 { margin-top: 0; color: #6be071;}
+
+        /* Zoom pyramid */
+        .pyramid-section {
+            margin-top: 30px;
+            border-top: 2px solid #3c4a4a;
+            padding-top: 20px;
+        }
+        .pyramid-grid {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 14px;
+            margin-top: 15px;
+        }
+        .tile {
+            margin: 0;
+            text-align: center;
+        }
+        .tile canvas {
+            display: block;
+            border-width: 2px;
+        }
+        .tile figcaption {
+            margin-top: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #b2f7b5;
+            line-height: 1.5;
+        }
+        .tile figcaption .pending { color: #6b7b7b; }
+        .tile figcaption .failed { color: #ff8a80; }
+
+        /* Single-tile controls */
+        .tile-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 10px;
+            margin: 16px 0 12px;
+        }
+        .tile-controls label {
+            display: block;
+            font-size: 11px;
+            color: #b2f7b5;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .tile-controls input {
+            width: 100%;
+            box-sizing: border-box;
+            background: #121616;
+            border: 1px solid #3c4a4a;
+            color: #eaeeee;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .tile-controls input:focus {
+            outline: none;
+            border-color: #6be071;
+        }
+        .mode-hint {
+            font-size: 11px;
+            color: #7a8a8a;
+            line-height: 1.5;
+            margin: 0 0 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>PoGoMapParser Interface Pipeline</h2>
+        <p>Pure 2D layout generator matching native 2016 Map visuals.</p>
+    </div>
+
+    <div class="layout-grid">
+        <!-- Render Target Frame -->
+        <canvas id="pogoCanvas" width="550" height="550"></canvas>
+
+        <!-- Command Dashboard Controls -->
+        <div class="panel">
+            <h3>Engine Functions</h3>
+            
+            <button onclick="runDemoFetch()">1. Fetch & Render Demo Location</button>
+            <button onclick="exportTile()">2. Export Canvas to 2D Image Tile</button>
+            <button onclick="renderPyramid()" id="pyramidBtn">3. Fetch &amp; Render 25-Level Pyramid</button>
+            <button onclick="clearMap()">Clear Frame</button>
+
+            <div style="margin-top: 20px;">
+                <strong>Active BBox Bounds (Demo Area):</strong>
+                <div style="font-size: 13px; color: #b2f7b5; margin-top: 5px;">
+                    Lat: 40.7470 to 40.7530<br>
+                    Lon: -73.9880 to -73.9800 (Midtown Manhattan area)
+                </div>
+            </div>
+
+            <h3 style="margin-top: 24px;">Single Tile</h3>
+            <p class="mode-hint">
+                Renders one tile of the requested type in the output area below,
+                instead of the whole pyramid.
+            </p>
+            <div class="tile-controls">
+                <div>
+                    <label for="tileZoom">Zoom (z)</label>
+                    <input type="number" id="tileZoom" value="17" min="6" max="34" step="0.5">
+                </div>
+                <div>
+                    <label for="tileSize">Tile px</label>
+                    <input type="number" id="tileSize" value="256" min="64" max="1024" step="16">
+                </div>
+                <div>
+                    <label for="tileLat">Center lat</label>
+                    <input type="number" id="tileLat" value="40.7500" step="0.0001">
+                </div>
+                <div>
+                    <label for="tileLon">Center lon</label>
+                    <input type="number" id="tileLon" value="-73.9840" step="0.0001">
+                </div>
+            </div>
+            <button onclick="renderSingleTile()" id="singleTileBtn">4. Render Single Tile</button>
+
+            <div class="log-box" id="statusLog">Status: Engine Ready.</div>
+            <div class="log-box" id="pyramidLog">Pyramid: Idle.</div>
+        </div>
+    </div>
+
+    <!-- Zoom Pyramid Output -->
+    <div class="pyramid-section">
+        <h3 id="outputTitle">25-Level Zoom Pyramid</h3>
+        <p style="font-size: 13px; color: #b2f7b5;" id="outputBlurb">
+            Every tile is a separate map tile at a different zoom level and pixel size,
+            rendered from data fetched for that level. Tiles grow left to right.
+        </p>
+        <div class="pyramid-grid" id="pyramidGrid"></div>
+    </div>
+</div>
+
+<script src="../src/PoGoMapParser.js"></script>
+<script>
+    // Initialize the engine instance
+    const parser = new PoGoMapParser('pogoCanvas');
+    const log = document.getElementById('statusLog');
+    const pyramidLog = document.getElementById('pyramidLog');
+    const pyramidGrid = document.getElementById('pyramidGrid');
+    const pyramidBtn = document.getElementById('pyramidBtn');
+    const singleTileBtn = document.getElementById('singleTileBtn');
+    const outputTitle = document.getElementById('outputTitle');
+    const outputBlurb = document.getElementById('outputBlurb');
+    const tileInput = {
+        zoom: document.getElementById('tileZoom'),
+        size: document.getElementById('tileSize'),
+        lat: document.getElementById('tileLat'),
+        lon: document.getElementById('tileLon')
+    };
+
+    // Coordinate Bounding box presets configuration 
+    const bbox = {
+        south: 40.7470,
+        west: -73.9880,
+        north: 40.7530,
+        east: -73.9800
+    };
+
+    // Live feedback for every sub-query and retry, so a slow fetch reads as
+    // working rather than hung. The parser calls this throughout fetchMapData.
+    parser.onProgress = (message) => {
+        log.innerText = `Status: ${message}`;
+    };
+
+    // No local server needed: the OSM API sends Access-Control-Allow-Origin for
+    // this page's origin, so the browser can call it directly.
+    log.innerText = 'Status: Engine ready - querying api.openstreetmap.org directly.';
+
+    async function runDemoFetch() {
+        log.innerText = "Status: Querying the OSM API...";
+        const start = performance.now();
+        
+        const data = await parser.fetchMapData(bbox.south, bbox.west, bbox.north, bbox.east);
+        
+        if(data && data.length > 0) {
+            parser.render(data, bbox.south, bbox.west, bbox.north, bbox.east);
+            const duration = ((performance.now() - start) / 1000).toFixed(2);
+            log.innerText = `Status: Rendered ${data.length} vectors blazingly fast in ${duration}s!`;
+        } else if (parser.lastError) {
+            log.innerText = `Status: Fetch failed - ${parser.lastError}`;
+        } else {
+            log.innerText = "Status: Data fetch error or bounding box is empty.";
+        }
+    }
+
+    function exportTile() {
+        const imageUri = parser.exportToTileImage();
+        
+        // Open the raw 2D PNG file cleanly inside a new window tab layout
+        // window.open() returns null when a popup blocker intervenes, and a freshly
+        // opened tab has no parsed <body> yet, so build the document explicitly.
+        const newTab = window.open('', '_blank');
+        if (!newTab) {
+            log.innerText = "Status: Export blocked - allow popups for this page.";
+            return;
+        }
+
+        newTab.document.open();
+        newTab.document.write(`<!DOCTYPE html><html><head><title>Exported 2016 Map Tile</title></head>` +
+            `<body style="margin:0;background:#1e2525;display:flex;justify-content:center;">` +
+            `<img src="${imageUri}" style="border: 2px solid #5b6d6d;" alt="Exported 2016 Map Tile" /></body></html>`);
+        newTab.document.close();
+        log.innerText = "Status: Exported standalone 2D image asset to a new tab!";
+    }
+
+    function clearMap() {
+        // Repaint the ground grain rather than clearRect, which would leave a
+        // transparent canvas and export as a blank PNG
+        parser.clear();
+        log.innerText = "Status: Canvas cleared.";
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Zoom pyramid
+     * ------------------------------------------------------------------ */
+
+    const PYRAMID = {
+        levels: 25,            // number of zoom levels / tiles to produce
+        minZoom: 10,           // coarsest tile
+        maxZoom: 34,           // finest tile
+        minTilePx: 80,         // coarsest tile pixel size
+        maxTilePx: 248,        // finest tile pixel size
+        tierMinZoom: 12,       // first data fetch level
+        tierMaxZoom: 24,       // last data fetch level
+        tierStep: 1,           // one fetch per zoom level
+        requestDelayMs: 2000    // generous pause between levels on the single API
+    };
+    // One tile per whole zoom level, so the 25 levels step z10, z11 ... z34.
+
+    const CENTER = {
+        lat: (bbox.north + bbox.south) / 2,
+        lon: (bbox.east + bbox.west) / 2
+    };
+
+    let pyramidRunning = false;
+
+    /**
+     * The pyramid and the single-tile view share one output area, so only one of
+     * them may run at a time. Both long-running entry points claim it here and
+     * release it when they finish, so neither can render over the other.
+     */
+    function claimOutput() {
+        if (pyramidRunning) return false;
+        pyramidRunning = true;
+        pyramidBtn.disabled = true;
+        singleTileBtn.disabled = true;
+        return true;
+    }
+
+    function releaseOutput() {
+        pyramidRunning = false;
+        pyramidBtn.disabled = false;
+        singleTileBtn.disabled = false;
+    }
+
+    /** Builds the ordered list of zoom levels actually fetched. */
+    function buildTiers() {
+        const tiers = [];
+        for (let z = PYRAMID.tierMinZoom; z <= PYRAMID.tierMaxZoom; z += PYRAMID.tierStep) {
+            tiers.push(z);
+        }
+        return tiers;
+    }
+
+    /**
+     * The ordered tiles the pyramid renders: one per whole zoom level, growing in
+     * pixel size left to right. Kept separate from `renderPyramid` so the level
+     * arithmetic is inspectable without running a 25-tile fetch.
+     */
+    function buildTileSpecs() {
+        const last = PYRAMID.levels - 1;
+        const step = (PYRAMID.maxZoom - PYRAMID.minZoom) / last;
+        const specs = [];
+        for (let i = 0; i < PYRAMID.levels; i++) {
+            const zoom = PYRAMID.minZoom + i * step;
+            specs.push({
+                zoom,
+                size: Math.round(PYRAMID.minTilePx + (PYRAMID.maxTilePx - PYRAMID.minTilePx) * (i / last)),
+                tileBBox: PoGoMapParser.zoomBBox(CENTER.lat, CENTER.lon, zoom)
+            });
+        }
+        return specs;
+    }
+
+    /**
+     * Picks the data zoom a display tile should reuse. A tier covers a span of
+     * 360/2^tier, so it only fully covers a view of 360/2^zoom when tier <= zoom.
+     * We take the finest such tier for maximum detail; views coarser than every
+     * tier fall back to the coarsest one.
+     */
+    function pickTier(zoom, tiers) {
+        const usable = tiers.filter(z => z <= zoom);
+        return usable.length ? usable[usable.length - 1] : tiers[0];
+    }
+
+    function formatSpan(meters) {
+        if (meters < 1) return `${(meters * 100).toFixed(0)} cm`;
+        if (meters < 1000) return `${meters.toFixed(0)} m`;
+        return `${(meters / 1000).toFixed(meters < 10000 ? 2 : 1)} km`;
+    }
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    /** Fetches every data tier one at a time, rendering tiles as their data lands. */
+    async function renderPyramid() {
+        if (!claimOutput()) return;
+
+        // Put the section back into pyramid mode, in case a single tile was
+        // rendered into it last.
+        outputTitle.innerText = `${PYRAMID.levels}-Level Zoom Pyramid`;
+        outputBlurb.innerText =
+            'Every tile is a separate map tile at a different zoom level and pixel size, ' +
+            'rendered from data fetched for that level. Tiles grow left to right.';
+
+        const tiers = buildTiers();
+
+        // Build the tile shells first so the grid is visible while data streams in
+        pyramidGrid.innerHTML = '';
+        const tiles = [];
+
+        for (const spec of buildTileSpecs()) {
+            const { zoom, size, tileBBox } = spec;
+            const tier = pickTier(zoom, tiers);
+
+            const figure = document.createElement('figure');
+            figure.className = 'tile';
+
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+
+            const caption = document.createElement('figcaption');
+            caption.innerHTML =
+                `z${zoom.toFixed(1).replace(/\.0$/, '')}<br>` +
+                `${formatSpan(PoGoMapParser.spanMeters(tileBBox))}<br>` +
+                `<span class="pending">data z${tier} ...</span>`;
+
+            figure.appendChild(canvas);
+            figure.appendChild(caption);
+            pyramidGrid.appendChild(figure);
+
+            tiles.push({ zoom, size, tileBBox, tier, canvas, caption, done: false });
+        }
+
+        pyramidLog.innerText = `Pyramid: fetching ${tiers.length} data levels one at a time from the OSM API...`;
+
+        const start = performance.now();
+        let failed = 0;
+
+        for (const tier of tiers) {
+            const tierBBox = PoGoMapParser.zoomBBox(CENTER.lat, CENTER.lon, tier);
+            // Surface how many sub-queries this level actually expands into, so a slow
+            // coarse level reads as "9 sub-queries" rather than an unexplained stall.
+            const parts = parser.splitBBox(tierBBox).length;
+            const tierLabel = `data z${tier} (${parts} quer${parts === 1 ? 'y' : 'ies'})`;
+
+            const before = parser.lastError;
+            // Route this level's sub-query progress into the pyramid log, so a
+            // slow level shows which sub-query it is on instead of stalling.
+            parser.onProgress = (message) => {
+                pyramidLog.innerText = `Pyramid: ${tierLabel} - ${message}`;
+            };
+            const data = await parser.fetchMapData(
+                tierBBox.south, tierBBox.west, tierBBox.north, tierBBox.east
+            );
+            const errored = data.length === 0 && parser.lastError !== before;
+            if (errored) failed++;
+
+            // Render every tile that draws on this tier as soon as its data is ready
+            for (const tile of tiles) {
+                if (tile.done || tile.tier !== tier) continue;
+                const count = data.length;
+
+                try {
+                    if (count > 0) {
+                        parser.renderTo(tile.canvas, data, tile.tileBBox);
+                    } else {
+                        // Nothing to draw, but still lay down the grain so the tile
+                        // reads as a map rather than a blank hole
+                        const ctx = tile.canvas.getContext('2d');
+                        ctx.fillStyle = parser.createTerrainPattern(ctx);
+                        ctx.fillRect(0, 0, tile.canvas.width, tile.canvas.height);
+                    }
+                } catch (error) {
+                    console.error('Pyramid tile render failed:', error);
+                }
+
+                tile.caption.innerHTML =
+                    `z${tile.zoom.toFixed(1).replace(/\.0$/, '')}<br>` +
+                    `${formatSpan(PoGoMapParser.spanMeters(tile.tileBBox))}<br>` +
+                    (count > 0
+                        ? `<span>${count} vec &middot; data z${tier}</span>`
+                        : `<span class="${errored ? 'failed' : 'pending'}">` +
+                          `${errored ? 'fetch failed' : 'no data'} &middot; z${tier}</span>`);
+                tile.done = true;
+            }
+
+            // Generous pause between levels: everything runs sequentially against
+            // the OSM API, and slow sequential requests are
+            // what avoid 504s.
+            if (tier !== tiers[tiers.length - 1]) await sleep(PYRAMID.requestDelayMs);
+        }
+
+        // Stop routing parser progress into the pyramid log once the run ends
+        parser.onProgress = null;
+
+        const duration = ((performance.now() - start) / 1000).toFixed(1);
+        pyramidLog.innerText =
+            `Pyramid: ${PYRAMID.levels} tiles from ${tiers.length} data levels in ${duration}s` +
+            (failed ? ` - ${failed} level(s) failed.` : ' - all levels ok.');
+
+        releaseOutput();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Single tile
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Reads a number input, falling back to a default when it has been cleared
+     * or typed garbage into. An empty box mid-edit must not render a 0x0 tile.
+     */
+    function readNumber(input, fallback, min, max) {
+        const value = parseFloat(input.value);
+        if (!Number.isFinite(value)) return fallback;
+        return Math.min(max, Math.max(min, value));
+    }
+
+    /**
+     * Fetches and renders one tile of the requested zoom, size and centre into
+     * the output area, replacing whatever the pyramid last drew there.
+     *
+     * This is the same path the pyramid uses per level — `fetchMapData` splits
+     * the view, queries it sequentially, and `renderTo` paints it — so a single
+     * tile is exactly what one pyramid level produces, on its own.
+     */
+    async function renderSingleTile() {
+        if (!claimOutput()) return;
+
+        const zoom = readNumber(tileInput.zoom, 17, 6, 34);
+        const size = Math.round(readNumber(tileInput.size, 256, 64, 1024));
+        const lat = readNumber(tileInput.lat, CENTER.lat, -85, 85);
+        const lon = readNumber(tileInput.lon, CENTER.lon, -180, 180);
+
+        // Reflect the clamped values back, so the box never disagrees with what
+        // was actually rendered.
+        tileInput.zoom.value = zoom;
+        tileInput.size.value = size;
+        tileInput.lat.value = lat;
+        tileInput.lon.value = lon;
+
+        const tileBBox = PoGoMapParser.zoomBBox(lat, lon, zoom);
+        const span = PoGoMapParser.spanMeters(tileBBox);
+        const subBoxes = parser.splitBBox(tileBBox).length;
+
+        outputTitle.innerText = `Single Tile - z${zoom} at ${size}px`;
+        outputBlurb.innerText =
+            `One tile centred on ${lat.toFixed(4)}, ${lon.toFixed(4)}, ` +
+            `covering ${formatSpan(span)} of ground.`;
+
+        // Build the shell first so the tile is visible while its data is fetched.
+        pyramidGrid.innerHTML = '';
+        const figure = document.createElement('figure');
+        figure.className = 'tile';
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const caption = document.createElement('figcaption');
+        caption.innerHTML =
+            `z${zoom}<br>${formatSpan(span)}<br>` +
+            `<span class="pending">${subBoxes} quer${subBoxes === 1 ? 'y' : 'ies'} ...</span>`;
+        figure.appendChild(canvas);
+        figure.appendChild(caption);
+        pyramidGrid.appendChild(figure);
+
+        // Route the parser's per-sub-query chatter into the pyramid log, which is
+        // where this view reports its progress.
+        parser.onProgress = (message) => {
+            pyramidLog.innerText = `Single tile: z${zoom} - ${message}`;
+        };
+
+        const start = performance.now();
+        const before = parser.lastError;
+        let data = [];
+        let error = null;
+        try {
+            data = await parser.fetchMapData(
+                tileBBox.south, tileBBox.west, tileBBox.north, tileBBox.east
+            );
+        } catch (e) {
+            // fetchMapData degrades to an empty array by design; this only catches
+            // a bug in the split or merge helpers, and must not kill the page.
+            error = e;
+            console.error('Single tile fetch failed:', e);
+        }
+        parser.onProgress = null;
+
+        const failed = error || (data.length === 0 && parser.lastError !== before);
+        if (failed) {
+            // Still lay down the grain so an empty tile reads as map, not a hole.
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = parser.createTerrainPattern(ctx);
+            ctx.fillRect(0, 0, size, size);
+        } else {
+            try {
+                parser.renderTo(canvas, data, tileBBox);
+            } catch (e) {
+                error = e;
+                console.error('Single tile render failed:', e);
+            }
+        }
+
+        const duration = ((performance.now() - start) / 1000).toFixed(2);
+        caption.innerHTML =
+            `z${zoom}<br>${formatSpan(span)}<br>` +
+            (error
+                ? `<span class="failed">render failed</span>`
+                : data.length
+                    ? `<span>${data.length} vec &middot; ${duration}s</span>`
+                    : `<span class="${failed ? 'failed' : 'pending'}">` +
+                      `${failed ? 'fetch failed' : 'no data'}</span>`);
+
+        pyramidLog.innerText = error
+            ? `Single tile: z${zoom} failed - ${error.message}`
+            : failed
+                ? `Single tile: z${zoom} fetch failed - ${parser.lastError}`
+                : `Single tile: z${zoom} rendered ${data.length} vectors in ${duration}s.`;
+
+        releaseOutput();
+    }
+</script>
+
+</body>
+</html>

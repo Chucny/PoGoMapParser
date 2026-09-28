@@ -1,0 +1,43 @@
+{
+  "name": "pogomapparser",
+  "version": "1.0.0",
+  "description": "2D OpenStreetMap tile renderer that reproduces the 2016 Pokemon GO map style, in a single dependency-free browser file.",
+  "keywords": [
+    "openstreetmap",
+    "osm",
+    "pokemon-go",
+    "map",
+    "renderer",
+    "canvas",
+    "tile",
+    "visualization"
+  ],
+  "license": "GPL-3.0-or-later",
+  "author": "PoGoMapParser contributors",
+  "type": "commonjs",
+  "main": "src/PoGoMapParser.js",
+  "exports": {
+    ".": "./src/PoGoMapParser.js",
+    "./package.json": "./package.json"
+  },
+  "browser": "src/PoGoMapParser.js",
+  "sideEffects": true,
+  "files": [
+    "src/",
+    "demo/",
+    "tools/",
+    "docs/ref2016/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node test/test_fetch.mjs && node test/test_single_tile.mjs",
+    "serve": "python tools/serve.py"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
