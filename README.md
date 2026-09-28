@@ -4,13 +4,11 @@ A 2D OpenStreetMap tile renderer that reproduces the map style of the original
 2016 Pokémon GO client, in a single dependency-free file.
 
 Point it at a canvas, give it a bounding box, and it draws mint-green land,
-emerald parks, sky-blue water, cream-cased roads and faint building footprints
-onto a 2D canvas — straight from the official OpenStreetMap API, with no build
+emerald parks, sky-blue water and stuff to a 2D canvas — straight from the official OpenStreetMap API, with no build
 step, no bundler and no map tile server.
 
 <!-- A reference screenshot from the July 2016 Pokemon GO client, not output of
      this renderer. It documents the style being targeted. -->
-![Reference screenshot of the 2016 Pokemon GO client, the style this renderer targets](docs/ref2016/ref01.png)
 
 ---
 
@@ -202,10 +200,7 @@ const PoGoMapParser = require('pogomapparser');
 ## The 2016 style
 
 The palette was sampled from the July 2016 release and the April 2016 beta
-field test. The 15 reference screenshots are in
-[`docs/ref2016/`](docs/ref2016) — those are captures of the original client,
-included to document the target style, not output of this renderer. The values
-below are 5×5 averaged samples from them.
+field test. 
 
 | Element | Colour | Notes |
 | --- | --- | --- |
@@ -222,8 +217,8 @@ Two deliberate departures from the references, both noted in the source:
 
 - **Buildings are darker than the client showed.** The 2016 references sample
   near-white here (`#F3FDF0`), which reads as blocks dropped on top of the map.
-  These sit only just darker than the mint ground, so footprints read as a
-  subtle texture instead.
+  These sit only just darker than the mint ground
+  
 - **Road strokes are doubled.** At the reference weight the two-pass
   casing/fill construction dissolves into the ground colour at tile scale.
   Building edges stay at the reference `0.75`, because a heavy outline would
@@ -399,7 +394,7 @@ to be filed:
 
 ---
 
-## Licence
+## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE) for the full text.
 
